@@ -1,0 +1,1271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Galaga Retro Arcade Shooter</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Press Start 2P', monospace;
+            background-color: #050508;
+            color: #ffffff;
+            touch-action: manipulation;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        .arcade-box {
+            box-shadow: 0 0 20px rgba(0, 240, 255, 0.4), inset 0 0 15px rgba(255, 0, 128, 0.3);
+            border: 4px solid #00f0ff;
+        }
+        .retro-btn {
+            background: linear-gradient(180deg, #ff007f 0%, #99004c 100%);
+            box-shadow: 0 4px 0 #55002a, 0 0 10px rgba(255, 0, 127, 0.6);
+            transition: all 0.1s ease;
+        }
+        .retro-btn:active {
+            transform: translateY(4px);
+            box-shadow: 0 0 0 #55002a, 0 0 5px rgba(255, 0, 127, 0.6);
+        }
+        .touch-btn {
+            background: rgba(255, 255, 255, 0.15);
+            border: 2px solid rgba(0, 240, 255, 0.5);
+            backdrop-filter: blur(4px);
+        }
+        .touch-btn:active {
+            background: rgba(0, 240, 255, 0.4);
+        }
+        canvas {
+            image-rendering: pixelated;
+        }
+    </style>
+</head>
+<body class="h-screen w-screen overflow-hidden flex flex-col items-center justify-center p-2 sm:p-4">
+
+    <!-- Main Game Container -->
+    <div class="relative w-full max-w-2xl h-full max-h-[900px] flex flex-col items-center justify-between arcade-box rounded-xl bg-black overflow-hidden p-2">
+
+        <!-- Top HUD -->
+        <div class="w-full flex justify-between items-center text-xs sm:text-sm px-2 py-1 text-cyan-300 z-10 select-none">
+            <div class="flex flex-col">
+                <span>SCORE: <span id="scoreText" class="text-yellow-400">000000</span></span>
+                <span>HIGH: <span id="highScoreText" class="text-red-400">000000</span></span>
+            </div>
+            <div class="text-center">
+                <span class="block text-emerald-400">WAVE <span id="waveText">1</span></span>
+            </div>
+            <div class="flex flex-col items-end">
+                <span>LIVES</span>
+                <div id="livesContainer" class="flex gap-1 mt-1"></div>
+            </div>
+        </div>
+
+        <!-- Boss Health Bar Container (Hidden by default) -->
+        <div id="bossHealthContainer" class="w-full px-4 py-1 z-10 hidden flex flex-col items-center">
+            <div class="flex justify-between w-full text-[10px] sm:text-xs text-red-400 font-bold mb-1">
+                <span id="bossNameText">BOSS MOTHERSHIP (SHIELDED)</span>
+                <span id="bossHealthPercent">100%</span>
+            </div>
+            <div class="w-full bg-red-950 border border-red-500 rounded-full h-3 overflow-hidden relative">
+                <div id="bossHealthBar" class="bg-gradient-to-r from-red-600 via-orange-500 to-yellow-400 h-full w-full transition-all duration-200"></div>
+            </div>
+        </div>
+
+        <!-- Upgrade Selection Modal (Pick 1 of 3) -->
+        <div id="upgradeModal" class="absolute inset-0 z-30 hidden flex flex-col items-center justify-center bg-black/90 backdrop-blur-md p-4">
+            <h2 class="text-yellow-400 text-lg sm:text-2xl font-bold mb-1 animate-pulse">BOSS DEFEATED!</h2>
+            <p class="text-cyan-300 text-xs sm:text-sm mb-6">SELECT YOUR SYSTEM UPGRADE:</p>
+            <div id="upgradeCardsContainer" class="grid grid-cols-1 sm:grid-cols-3 gap-3 w-full max-w-xl">
+                <!-- Dynamically generated 3 cards -->
+            </div>
+        </div>
+
+        <!-- Canvas Container -->
+        <div class="relative w-full flex-1 flex items-center justify-center overflow-hidden my-1">
+            <canvas id="gameCanvas" class="w-full h-full rounded border border-slate-800"></canvas>
+
+            <!-- Overlay Screen: Start / Game Over -->
+            <div id="uiOverlay" class="absolute inset-0 flex flex-col items-center justify-center bg-black/85 backdrop-blur-sm z-20 text-center p-4">
+                <h1 id="overlayTitle" class="text-2xl sm:text-4xl text-yellow-400 mb-4 tracking-wider leading-relaxed animate-pulse">
+                    GALAGA ARCADE
+                </h1>
+                <p id="overlaySub" class="text-xs sm:text-sm text-cyan-300 mb-8 max-w-md leading-6">
+                    DEFEND THE GALAXY FROM ALIEN SWARMS!
+                </p>
+                <button id="startBtn" class="retro-btn text-white text-sm sm:text-base px-6 py-3 rounded-lg font-bold tracking-widest cursor-pointer">
+                    PRESS START
+                </button>
+                <div class="mt-8 text-[10px] sm:text-xs text-slate-400 space-y-1 hidden sm:block">
+                    <p>CONTROLS: [W][A][S][D] or [ARROWS] to Move</p>
+                    <p>[SPACE] to Fire Laser</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Mobile Touch Controls -->
+        <div id="mobileControls" class="w-full flex justify-between items-center px-2 py-2 gap-2 sm:hidden z-10">
+            <div class="grid grid-cols-3 gap-1">
+                <div></div>
+                <button id="btnUp" class="touch-btn w-11 h-11 rounded-full flex items-center justify-center text-lg text-cyan-300 active:scale-95">▲</button>
+                <div></div>
+                <button id="btnLeft" class="touch-btn w-11 h-11 rounded-full flex items-center justify-center text-lg text-cyan-300 active:scale-95">◀</button>
+                <button id="btnDown" class="touch-btn w-11 h-11 rounded-full flex items-center justify-center text-lg text-cyan-300 active:scale-95">▼</button>
+                <button id="btnRight" class="touch-btn w-11 h-11 rounded-full flex items-center justify-center text-lg text-cyan-300 active:scale-95">▶</button>
+            </div>
+            <button id="btnFire" class="touch-btn w-20 h-20 rounded-2xl flex items-center justify-center text-sm font-bold text-red-400 active:scale-95">FIRE</button>
+        </div>
+
+    </div>
+
+    <!-- Audio Synth API Implementation -->
+    <script>
+        // Retro Web Audio Sound Effects Generator
+        class SoundFX {
+            constructor() {
+                this.ctx = null;
+            }
+
+            init() {
+                if (!this.ctx) {
+                    this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+                }
+                if (this.ctx.state === 'suspended') {
+                    this.ctx.resume();
+                }
+            }
+
+            playLaser() {
+                if (!this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(800, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(150, this.ctx.currentTime + 0.15);
+                gain.gain.setValueAtTime(0.15, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.15);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.15);
+            }
+
+            playEnemyLaser() {
+                if (!this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(400, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(100, this.ctx.currentTime + 0.2);
+                gain.gain.setValueAtTime(0.1, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.2);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.2);
+            }
+
+            playExplosion(isPlayer = false) {
+                if (!this.ctx) return;
+                const bufferSize = this.ctx.sampleRate * (isPlayer ? 0.6 : 0.25);
+                const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+                const data = buffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) {
+                    data[i] = Math.random() * 2 - 1;
+                }
+                const noise = this.ctx.createBufferSource();
+                noise.buffer = buffer;
+
+                const filter = this.ctx.createBiquadFilter();
+                filter.type = 'lowpass';
+                filter.frequency.setValueAtTime(isPlayer ? 400 : 800, this.ctx.currentTime);
+                filter.frequency.linearRampToValueAtTime(50, this.ctx.currentTime + (isPlayer ? 0.6 : 0.25));
+
+                const gain = this.ctx.createGain();
+                gain.gain.setValueAtTime(isPlayer ? 0.3 : 0.2, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + (isPlayer ? 0.6 : 0.25));
+
+                noise.connect(filter);
+                filter.connect(gain);
+                gain.connect(this.ctx.destination);
+                noise.start();
+            }
+
+            playWaveComplete() {
+                if (!this.ctx) return;
+                const notes = [261.63, 329.63, 392.00, 523.25];
+                notes.forEach((freq, i) => {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'triangle';
+                    osc.frequency.value = freq;
+                    gain.gain.setValueAtTime(0.15, this.ctx.currentTime + i * 0.1);
+                    gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + i * 0.1 + 0.2);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start(this.ctx.currentTime + i * 0.1);
+                    osc.stop(this.ctx.currentTime + i * 0.1 + 0.2);
+                });
+            }
+
+            playPowerup() {
+                if (!this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(300, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(900, this.ctx.currentTime + 0.25);
+                gain.gain.setValueAtTime(0.2, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.25);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.25);
+            }
+
+            playShieldHit() {
+                if (!this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(600, this.ctx.currentTime);
+                osc.frequency.linearRampToValueAtTime(300, this.ctx.currentTime + 0.1);
+                gain.gain.setValueAtTime(0.1, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.1);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.1);
+            }
+        }
+
+        const sfx = new SoundFX();
+
+        // Canvas Setup & Global Game State
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // UI Elements
+        const scoreText = document.getElementById('scoreText');
+        const highScoreText = document.getElementById('highScoreText');
+        const waveText = document.getElementById('waveText');
+        const livesContainer = document.getElementById('livesContainer');
+        const uiOverlay = document.getElementById('uiOverlay');
+        const overlayTitle = document.getElementById('overlayTitle');
+        const overlaySub = document.getElementById('overlaySub');
+        const startBtn = document.getElementById('startBtn');
+        const bossHealthContainer = document.getElementById('bossHealthContainer');
+        const bossHealthBar = document.getElementById('bossHealthBar');
+        const bossHealthPercent = document.getElementById('bossHealthPercent');
+        const bossNameText = document.getElementById('bossNameText');
+        const upgradeModal = document.getElementById('upgradeModal');
+        const upgradeCardsContainer = document.getElementById('upgradeCardsContainer');
+
+        // Virtual Resolution
+        const GAME_WIDTH = 480;
+        const GAME_HEIGHT = 640;
+
+        let score = 0;
+        let highScore = localStorage.getItem('galaga_highscore') || 0;
+        let lives = 3;
+        let wave = 1;
+        let gameState = 'START'; // START, PLAYING, WAVECLEAR, UPGRADE_SELECT, GAMEOVER
+
+        // Key states
+        const keys = {
+            left: false,
+            right: false,
+            up: false,
+            down: false,
+            fire: false
+        };
+
+        function resizeCanvas() {
+            canvas.width = GAME_WIDTH;
+            canvas.height = GAME_HEIGHT;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // Starfield
+        const stars = Array.from({ length: 80 }, () => ({
+            x: Math.random() * GAME_WIDTH,
+            y: Math.random() * GAME_HEIGHT,
+            size: Math.random() * 2 + 0.5,
+            speed: Math.random() * 1.5 + 0.5,
+            color: ['#ffffff', '#88ffff', '#ff88ff', '#ffff88'][Math.floor(Math.random() * 4)]
+        }));
+
+        function updateStars() {
+            stars.forEach(s => {
+                s.y += s.speed;
+                if (s.y > GAME_HEIGHT) {
+                    s.y = 0;
+                    s.x = Math.random() * GAME_WIDTH;
+                }
+            });
+        }
+
+        function drawStars() {
+            stars.forEach(s => {
+                ctx.fillStyle = s.color;
+                ctx.fillRect(s.x, s.y, s.size, s.size);
+            });
+        }
+
+        // Particle System
+        let particles = [];
+        let pickups = [];
+
+        function createExplosion(x, y, color, count = 15) {
+            for (let i = 0; i < count; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const speed = Math.random() * 4 + 1;
+                particles.push({
+                    x, y,
+                    vx: Math.cos(angle) * speed,
+                    vy: Math.sin(angle) * speed,
+                    size: Math.random() * 3 + 1,
+                    color: color || '#ffaa00',
+                    alpha: 1,
+                    decay: Math.random() * 0.03 + 0.02
+                });
+            }
+        }
+
+        function updateParticles() {
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
+                p.x += p.vx;
+                p.y += p.vy;
+                p.alpha -= p.decay;
+                if (p.alpha <= 0) {
+                    particles.splice(i, 1);
+                }
+            }
+        }
+
+        function drawParticles() {
+            particles.forEach(p => {
+                ctx.save();
+                ctx.globalAlpha = p.alpha;
+                ctx.fillStyle = p.color;
+                ctx.fillRect(p.x, p.y, p.size, p.size);
+                ctx.restore();
+            });
+        }
+
+        // Spawn heart pickups with different tiers (1 life, 2 lives [Wave Heart], 3 lives [Boss Heart])
+        function spawnHeartPickup(x, y, tier = 1) {
+            // tier 1: normal small heart (+1 life, scale ~1.0)
+            // tier 2: wave large heart (+2 lives, scale ~1.5)
+            // tier 3: boss mega heart (+3 lives, scale ~2.2)
+            let livesGiven = 1;
+            let scale = 1.0;
+            let speed = 1.5;
+
+            if (tier === 2) {
+                livesGiven = 2;
+                scale = 1.5;
+                speed = 1.3;
+            } else if (tier === 3) {
+                livesGiven = 3;
+                scale = 2.2;
+                speed = 1.1;
+            }
+
+            pickups.push({ x, y, vy: speed, scale, livesGiven, tier });
+        }
+
+        function updatePickups() {
+            for (let i = pickups.length - 1; i >= 0; i--) {
+                const p = pickups[i];
+                p.y += p.vy;
+
+                // Dynamic hit detection box according to size scale
+                const hitRadius = 14 * p.scale;
+                if (p.x > player.x - hitRadius && p.x < player.x + player.width + hitRadius &&
+                    p.y > player.y - hitRadius && p.y < player.y + player.height + hitRadius) {
+                    
+                    if (lives < 6) {
+                        lives = Math.min(6, lives + p.livesGiven);
+                        updateLivesHUD();
+                    }
+                    score += p.livesGiven * 250;
+                    scoreText.textContent = String(score).padStart(6, '0');
+                    createExplosion(p.x, p.y, p.tier === 3 ? '#ff00aa' : (p.tier === 2 ? '#ff3366' : '#ff6699'), 20 * p.scale);
+                    sfx.playPowerup();
+                    pickups.splice(i, 1);
+                    continue;
+                }
+
+                if (p.y > GAME_HEIGHT + 30) {
+                    pickups.splice(i, 1);
+                }
+            }
+        }
+
+        function drawPickups() {
+            pickups.forEach(p => {
+                ctx.save();
+                ctx.translate(p.x, p.y);
+                ctx.scale(p.scale, p.scale);
+                
+                // Pulsing glow effect based on heart size tier
+                const pulse = Math.sin(Date.now() / 200) * 0.1 + 1;
+                ctx.scale(pulse, pulse);
+
+                ctx.fillStyle = p.tier === 3 ? '#ff0080' : (p.tier === 2 ? '#ff1a53' : '#ff4d79');
+                ctx.shadowBlur = 10 * p.scale;
+                ctx.shadowColor = p.tier === 3 ? '#ff00aa' : '#ff1a53';
+                
+                ctx.beginPath();
+                ctx.moveTo(0, 3);
+                ctx.bezierCurveTo(-6, -5, -12, 2, 0, 10);
+                ctx.bezierCurveTo(12, 2, 6, -5, 0, 3);
+                ctx.fill();
+
+                // Golden crown aura for Mega Boss Heart (3 lives)
+                if (p.tier === 3) {
+                    ctx.strokeStyle = '#ffff00';
+                    ctx.lineWidth = 1.2;
+                    ctx.stroke();
+                }
+
+                ctx.restore();
+            });
+        }
+
+        // Player Ship
+        const player = {
+            x: GAME_WIDTH / 2 - 16,
+            y: GAME_HEIGHT - 60,
+            width: 32,
+            height: 32,
+            forwardSpeed: 5.5,
+            backwardSpeed: 2.5,
+            strafeSpeed: 5.0,
+            minY: GAME_HEIGHT * 0.45,
+            maxY: GAME_HEIGHT - 42,
+            lastShot: 0,
+            shootDelay: 180,
+            bulletDamage: 1,
+            bulletSize: 3,
+            piercing: false,
+            shield: false,
+
+            reset() {
+                this.x = GAME_WIDTH / 2 - 16;
+                this.y = GAME_HEIGHT - 60;
+                this.isInvulnerable = false;
+            },
+
+            resetUpgrades() {
+                this.forwardSpeed = 5.5;
+                this.backwardSpeed = 2.5;
+                this.strafeSpeed = 5.0;
+                this.shootDelay = 180;
+                this.bulletDamage = 1;
+                this.bulletSize = 3;
+                this.piercing = false;
+                this.shield = false;
+            },
+
+            draw() {
+                if (this.isInvulnerable && Math.floor(Date.now() / 100) % 2 === 0) return;
+
+                ctx.save();
+                ctx.translate(this.x + 16, this.y + 16);
+
+                // Shield Aura if unlocked
+                if (this.shield) {
+                    ctx.strokeStyle = 'rgba(0, 240, 255, 0.6)';
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, 24, 0, Math.PI * 2);
+                    ctx.stroke();
+                }
+
+                // Main Fuselage Body
+                ctx.fillStyle = '#00f0ff';
+                ctx.beginPath();
+                ctx.moveTo(0, -16);
+                ctx.lineTo(12, 10);
+                ctx.lineTo(6, 16);
+                ctx.lineTo(0, 10);
+                ctx.lineTo(-6, 16);
+                ctx.lineTo(-12, 10);
+                ctx.closePath();
+                ctx.fill();
+
+                // Cockpit & Wings
+                ctx.fillStyle = '#ff0055';
+                ctx.fillRect(-4, -6, 8, 10);
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(-2, -12, 4, 6);
+
+                // Dual Side Launchers
+                ctx.fillStyle = '#ffe600';
+                ctx.fillRect(-18, -4, 5, 18);
+                ctx.fillStyle = '#ff0044';
+                ctx.fillRect(-18, -10, 5, 6);
+                
+                ctx.fillStyle = '#ffe600';
+                ctx.fillRect(13, -4, 5, 18);
+                ctx.fillStyle = '#ff0044';
+                ctx.fillRect(13, -10, 5, 6);
+
+                // Thrusters
+                if (keys.up || keys.left || keys.right || keys.fire) {
+                    ctx.fillStyle = keys.up ? '#00ffff' : '#ffaa00';
+                    ctx.beginPath();
+                    ctx.moveTo(-4, 14);
+                    ctx.lineTo(4, 14);
+                    ctx.lineTo(0, 18 + (keys.up ? 10 : 4) + Math.random() * 4);
+                    ctx.closePath();
+                    ctx.fill();
+                }
+
+                ctx.restore();
+            },
+
+            update() {
+                if (keys.left && this.x > 10) this.x -= this.strafeSpeed;
+                if (keys.right && this.x < GAME_WIDTH - this.width - 10) this.x += this.strafeSpeed;
+
+                if (keys.up && this.y > this.minY) this.y -= this.forwardSpeed;
+                if (keys.down && this.y < this.maxY) this.y += this.backwardSpeed;
+
+                if (this.y < this.minY) this.y = this.minY;
+                if (this.y > this.maxY) this.y = this.maxY;
+
+                if (this.isInvulnerable && Date.now() > this.invulnerableTimer) {
+                    this.isInvulnerable = false;
+                }
+
+                if (keys.fire) {
+                    this.shoot();
+                }
+            },
+
+            shoot() {
+                const now = Date.now();
+                if (now - this.lastShot > this.shootDelay) {
+                    this.lastShot = now;
+                    const bColor = this.piercing ? '#ff00ff' : (this.bulletDamage > 1 ? '#ffcc00' : '#00ffff');
+                    
+                    // Dual Pod Fire
+                    playerBullets.push({
+                        x: this.x - 2, y: this.y - 4,
+                        width: this.bulletSize, height: 14,
+                        speed: 11, damage: this.bulletDamage,
+                        piercing: this.piercing, color: bColor
+                    });
+                    playerBullets.push({
+                        x: this.x + this.width - 2, y: this.y - 4,
+                        width: this.bulletSize, height: 14,
+                        speed: 11, damage: this.bulletDamage,
+                        piercing: this.piercing, color: bColor
+                    });
+                    sfx.playLaser();
+                }
+            }
+        };
+
+        // Available Pool of Upgrade Options for Modal Selection
+        const UPGRADE_POOL = [
+            { id: 'dmg', title: 'DAMAGE +1', desc: 'Increases bullet damage', apply: () => player.bulletDamage += 1 },
+            { id: 'rate', title: 'FIRE RATE +', desc: 'Increases shooting speed', apply: () => player.shootDelay = Math.max(75, player.shootDelay - 30) },
+            { id: 'speed', title: 'ENGINE BOOST', desc: 'Faster strafe & thruster speed', apply: () => { player.strafeSpeed += 1.2; player.forwardSpeed += 1.2; } },
+            { id: 'size', title: 'HEAVY LASERS', desc: 'Wider plasma projectiles', apply: () => player.bulletSize += 3 },
+            { id: 'pierce', title: 'PIERCING BEAM', desc: 'Lasers punch through targets', apply: () => player.piercing = true },
+            { id: 'heal', title: 'MAX REPAIR', desc: 'Restores +2 Lives immediately', apply: () => { lives = Math.min(6, lives + 2); updateLivesHUD(); } },
+            { id: 'shield', title: 'PLASMA SHIELD', desc: 'Reduces impact damage taken', apply: () => player.shield = true }
+        ];
+
+        function triggerUpgradeSelection() {
+            gameState = 'UPGRADE_SELECT';
+            upgradeCardsContainer.innerHTML = '';
+
+            // Randomly select 3 unique options from pool
+            const shuffled = [...UPGRADE_POOL].sort(() => 0.5 - Math.random());
+            const options = shuffled.slice(0, 3);
+
+            options.forEach(opt => {
+                const card = document.createElement('div');
+                card.className = 'arcade-box bg-slate-900 hover:bg-cyan-950/60 p-4 rounded-xl flex flex-col items-center text-center cursor-pointer transform hover:scale-105 transition-all';
+                card.innerHTML = `
+                    <div class="text-xs text-yellow-400 font-bold mb-2">${opt.title}</div>
+                    <div class="text-[10px] text-slate-300 leading-tight">${opt.desc}</div>
+                    <button class="retro-btn text-[10px] px-3 py-1 mt-4 rounded font-bold text-white">SELECT</button>
+                `;
+                card.onclick = () => {
+                    opt.apply();
+                    sfx.playPowerup();
+                    upgradeModal.classList.add('hidden');
+                    advanceNextWave();
+                };
+                upgradeCardsContainer.appendChild(card);
+            });
+
+            upgradeModal.classList.remove('hidden');
+        }
+
+        function advanceNextWave() {
+            wave++;
+            waveText.textContent = wave;
+            spawnWave(wave);
+            gameState = 'PLAYING';
+        }
+
+        let playerBullets = [];
+        let enemyBullets = [];
+
+        function updateBullets() {
+            for (let i = playerBullets.length - 1; i >= 0; i--) {
+                const b = playerBullets[i];
+                b.y -= b.speed;
+                if (b.y < -20) playerBullets.splice(i, 1);
+            }
+
+            for (let i = enemyBullets.length - 1; i >= 0; i--) {
+                const b = enemyBullets[i];
+                b.x += (b.vx || 0);
+                b.y += (b.vy || b.speed);
+                if (b.y > GAME_HEIGHT + 20 || b.x < -20 || b.x > GAME_WIDTH + 20) enemyBullets.splice(i, 1);
+            }
+        }
+
+        function drawBullets() {
+            ctx.shadowBlur = 8;
+            playerBullets.forEach(b => {
+                ctx.fillStyle = b.color || '#00ffff';
+                ctx.shadowColor = b.color || '#00ffff';
+                ctx.fillRect(b.x, b.y, b.width, b.height);
+            });
+
+            enemyBullets.forEach(b => {
+                ctx.fillStyle = b.color || '#ff3300';
+                ctx.shadowColor = b.color || '#ff3300';
+                ctx.fillRect(b.x, b.y, b.width || 4, b.height || 10);
+            });
+            ctx.shadowBlur = 0;
+        }
+
+        // Alien Enemies (Tiered 1-Tap, 2-Tap, 3-Tap + Mothership & Guards)
+        class Enemy {
+            constructor(gridX, gridY, type) {
+                this.gridX = gridX;
+                this.gridY = gridY;
+                this.type = type; 
+                // 1: Front (1-Tap / 1 HP, Kamikaze Attacker - Red Triangle formation)
+                // 2: Middle (2-Tap / 2 HP, Mid-screen swooper - Yellow Rectangle formation)
+                // 3: Back (3-Tap / 3 HP, Sniping Tank - Purple Bar/Square formation)
+                // 4: Boss Mothership (Shielded until guards clear)
+                // 5: Boss Escort Guard (Surrounds Mothership)
+
+                if (type === 1) { // Front Row (V-Shape/Triangle Group)
+                    this.width = 22; this.height = 22;
+                    this.points = 50; this.color = '#ff3366';
+                    this.hp = 1;
+                } else if (type === 2) { // Middle Row (Rectangle Grid Group)
+                    this.width = 28; this.height = 26;
+                    this.points = 100; this.color = '#ffcc00';
+                    this.hp = 2;
+                } else if (type === 3) { // Back Row Snipers (Square Bar Group)
+                    this.width = 36; this.height = 32;
+                    this.points = 200; this.color = '#cc00ff';
+                    this.hp = 3;
+                } else if (type === 4) { // Boss Mothership
+                    this.width = 110; this.height = 70;
+                    this.points = 3000; this.color = '#ff0055';
+                    const bossLevel = Math.floor(wave / 5);
+                    this.maxHp = 25 + (bossLevel * 20);
+                    this.hp = this.maxHp;
+                    this.shielded = true; // Shielded while guards exist
+                } else if (type === 5) { // Boss Escort Guard
+                    this.width = 24; this.height = 24;
+                    this.points = 150; this.color = '#00ffff';
+                    this.hp = 2;
+                }
+
+                this.maxHp = this.hp;
+
+                if (type === 4) {
+                    this.homeX = GAME_WIDTH / 2 - this.width / 2;
+                    this.homeY = 60;
+                } else if (type === 5) {
+                    // Positioned in an orbit ring around Mothership
+                    const angle = (gridX / 6) * Math.PI * 2;
+                    this.homeX = (GAME_WIDTH / 2) + Math.cos(angle) * 90 - 12;
+                    this.homeY = 95 + Math.sin(angle) * 45;
+                } else {
+                    // Color Squad Formations:
+                    if (type === 1) {
+                        // TRIANGLE / V-FORMATION (Front Squad)
+                        // gridX 0..6 (center is 3)
+                        const offsetFromCenter = Math.abs(gridX - 3);
+                        this.homeX = (GAME_WIDTH / 2) + (gridX - 3) * 36 - 11;
+                        this.homeY = 170 + offsetFromCenter * 18;
+                    } else if (type === 2) {
+                        // RECTANGLE GRID FORMATION (Middle Squad)
+                        this.homeX = 75 + (gridX % 8) * 42;
+                        this.homeY = 95 + Math.floor(gridX / 8) * 32;
+                    } else if (type === 3) {
+                        // SQUARE / HORIZONTAL BAR FORMATION (Back Squad)
+                        this.homeX = 60 + gridX * 45;
+                        this.homeY = 45;
+                    }
+                }
+
+                this.x = this.homeX;
+                this.y = this.homeY;
+                this.isDiving = false;
+                this.diveTime = 0;
+            }
+
+            draw() {
+                ctx.save();
+                ctx.translate(this.x + this.width / 2, this.y + this.height / 2);
+                const wingSpread = Math.sin(Date.now() / 180 + this.gridX) * 4;
+
+                if (this.type === 1) { 
+                    // Front Squad (1-Tap): Red Triangle Interceptor
+                    ctx.fillStyle = this.color;
+                    ctx.beginPath();
+                    ctx.moveTo(0, 10);
+                    ctx.lineTo(10 + wingSpread / 2, -10);
+                    ctx.lineTo(0, -5);
+                    ctx.lineTo(-10 - wingSpread / 2, -10);
+                    ctx.closePath();
+                    ctx.fill();
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fillRect(-2, 0, 4, 4);
+
+                } else if (this.type === 2) { 
+                    // Middle Squad (2-Tap): Gold Rectangular Cruiser
+                    ctx.fillStyle = this.color;
+                    ctx.beginPath();
+                    ctx.moveTo(-12, -10);
+                    ctx.lineTo(12, -10);
+                    ctx.lineTo(14 + wingSpread / 2, 10);
+                    ctx.lineTo(-14 - wingSpread / 2, 10);
+                    ctx.closePath();
+                    ctx.fill();
+                    ctx.fillStyle = '#00ffff';
+                    ctx.fillRect(-4, -4, 8, 5);
+
+                } else if (this.type === 3) { 
+                    // Back Squad (3-Tap): Purple Heavy Dreadnought
+                    ctx.fillStyle = this.color;
+                    ctx.beginPath();
+                    ctx.moveTo(-14, -14);
+                    ctx.lineTo(14, -14);
+                    ctx.lineTo(18 + wingSpread / 2, 0);
+                    ctx.lineTo(14, 14);
+                    ctx.lineTo(-14, 14);
+                    ctx.lineTo(-18 - wingSpread / 2, 0);
+                    ctx.closePath();
+                    ctx.fill();
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fillRect(-6, -6, 12, 12);
+                    ctx.fillStyle = '#ff0000';
+                    ctx.fillRect(-2, -2, 4, 4);
+
+                } else if (this.type === 5) {
+                    // Boss Escort Guard
+                    ctx.fillStyle = this.color;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, 10, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.fillStyle = '#ffff00';
+                    ctx.fillRect(-3, -3, 6, 6);
+
+                } else if (this.type === 4) {
+                    // Mothership
+                    const pulse = Math.sin(Date.now() / 100) * 3;
+
+                    ctx.fillStyle = '#990033';
+                    ctx.beginPath();
+                    ctx.moveTo(-55, -20);
+                    ctx.lineTo(55, -20);
+                    ctx.lineTo(45 + pulse, 25);
+                    ctx.lineTo(25, 35);
+                    ctx.lineTo(-25, 35);
+                    ctx.lineTo(-45 - pulse, 25);
+                    ctx.closePath();
+                    ctx.fill();
+
+                    ctx.fillStyle = '#ff0055';
+                    ctx.fillRect(-35, -30, 70, 50);
+
+                    ctx.fillStyle = '#00ffff';
+                    ctx.fillRect(-45, 10, 8, 20);
+                    ctx.fillRect(37, 10, 8, 20);
+
+                    ctx.fillStyle = '#ffff00';
+                    ctx.beginPath();
+                    ctx.arc(0, 0, 16 + pulse / 2, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    // Render Force Shield Dome if Shielded
+                    if (this.shielded) {
+                        ctx.strokeStyle = '#00ffff';
+                        ctx.shadowBlur = 15;
+                        ctx.shadowColor = '#00ffff';
+                        ctx.lineWidth = 4;
+                        ctx.beginPath();
+                        ctx.ellipse(0, 0, 70 + pulse, 45 + pulse, 0, 0, Math.PI * 2);
+                        ctx.stroke();
+                        ctx.shadowBlur = 0;
+                    }
+                }
+
+                ctx.restore();
+            }
+
+            update(formationOffset, allowDive) {
+                if (this.type === 4) {
+                    // Mothership sway
+                    this.x = (GAME_WIDTH / 2 - this.width / 2) + Math.sin(Date.now() / 800) * 120;
+                    this.y = 50 + Math.sin(Date.now() / 500) * 15;
+
+                    // Weapons scaling per 5 waves
+                    const bossLevel = Math.floor(wave / 5);
+                    const attackFrequency = 0.015 + Math.min(0.04, bossLevel * 0.008);
+                    
+                    if (allowDive && Math.random() < attackFrequency) {
+                        const bulletSpeed = 3.8 + Math.min(3.0, bossLevel * 0.5);
+                        
+                        // Dual Cannon Shots
+                        enemyBullets.push({ x: this.x + 10, y: this.y + this.height, speed: bulletSpeed });
+                        enemyBullets.push({ x: this.x + this.width - 10, y: this.y + this.height, speed: bulletSpeed });
+
+                        // Wave 10+ Radial Spread Shot
+                        if (bossLevel >= 2 && Math.random() < 0.5) {
+                            for (let angle = -0.4; angle <= 0.4; angle += 0.4) {
+                                enemyBullets.push({
+                                    x: this.x + this.width / 2,
+                                    y: this.y + this.height,
+                                    vx: Math.sin(angle) * (bulletSpeed * 0.8),
+                                    vy: Math.cos(angle) * bulletSpeed,
+                                    color: '#ff00ff'
+                                });
+                            }
+                        }
+                        sfx.playEnemyLaser();
+                    }
+                    return;
+                }
+
+                if (this.type === 5) {
+                    // Orbit around Mothership
+                    const angle = (this.gridX / 6) * Math.PI * 2 + (Date.now() / 600);
+                    const parentX = (GAME_WIDTH / 2) + Math.sin(Date.now() / 800) * 120;
+                    const parentY = 50 + Math.sin(Date.now() / 500) * 15;
+                    this.x = parentX + Math.cos(angle) * 85 - 12;
+                    this.y = parentY + Math.sin(angle) * 40 + 20;
+
+                    const guardShotFreq = 0.003 + Math.min(0.01, wave * 0.001);
+                    if (allowDive && Math.random() < guardShotFreq) {
+                        enemyBullets.push({ x: this.x + 10, y: this.y + 20, speed: 3.5 + Math.min(2.0, wave * 0.2), color: '#00ffff' });
+                    }
+                    return;
+                }
+
+                // Regular Wave Behavior with Progressive Difficulty Scaling
+                if (!this.isDiving) {
+                    this.x = this.homeX + formationOffset;
+                    this.y = this.homeY;
+
+                    if (allowDive) {
+                        // Smooth Progressive Attack Chance:
+                        // Waves 1-3 are very gentle; increases gradually as wave & upgrades climb
+                        const kamikazeRate = 0.0004 + Math.min(0.004, wave * 0.0004);
+                        const swooperRate = 0.0003 + Math.min(0.003, wave * 0.0003);
+                        const sniperRate = 0.0015 + Math.min(0.015, wave * 0.0015);
+
+                        if (this.type === 1 && Math.random() < kamikazeRate) {
+                            // Front Squad (1-Tap): Kamikaze attack
+                            this.startDive();
+                        } else if (this.type === 2 && Math.random() < swooperRate) {
+                            // Middle Squad (2-Tap): Swoop mid-screen
+                            this.startDive();
+                        } else if (this.type === 3 && Math.random() < sniperRate) {
+                            // Back Squad (3-Tap): Sniping laser from far top
+                            const bulletSpeed = 3.5 + Math.min(3.5, wave * 0.3);
+                            enemyBullets.push({
+                                x: this.x + this.width / 2 - 2,
+                                y: this.y + this.height,
+                                speed: bulletSpeed,
+                                color: '#cc00ff'
+                            });
+                            sfx.playEnemyLaser();
+                        }
+                    }
+                } else {
+                    // Diving movement with scaled speed
+                    this.diveTime += 0.035;
+                    const diveSpeedMult = 1.0 + Math.min(1.2, wave * 0.08);
+
+                    if (this.type === 1) { // Front squad kamikaze
+                        this.y += (3.0 * diveSpeedMult);
+                        this.x += (player.x - this.x) * (0.008 + Math.min(0.02, wave * 0.002)); // Player tracking gets sharper over waves
+                    } else { // Middle squad swooper
+                        this.y += (2.4 * diveSpeedMult);
+                        this.x += Math.sin(this.diveTime * 2) * 4.0;
+                        
+                        const midShotChance = 0.008 + Math.min(0.02, wave * 0.002);
+                        if (Math.random() < midShotChance && this.y < GAME_HEIGHT - 100) {
+                            enemyBullets.push({ x: this.x + 10, y: this.y + 20, speed: 3.5 + Math.min(2.5, wave * 0.2), color: '#ffcc00' });
+                        }
+                    }
+
+                    if (this.y > GAME_HEIGHT) {
+                        this.y = -30;
+                        this.isDiving = false;
+                    }
+                }
+            }
+
+            startDive() {
+                this.isDiving = true;
+                this.diveTime = 0;
+            }
+        }
+
+        let enemies = [];
+        let formationOffset = 0;
+        let formationDirection = 1;
+        let isBossWave = false;
+
+        function spawnWave(waveNum) {
+            enemies = [];
+            isBossWave = (waveNum % 5 === 0);
+
+            if (isBossWave) {
+                bossHealthContainer.classList.remove('hidden');
+                bossNameText.textContent = `BOSS MOTHERSHIP (SHIELDED)`;
+
+                // 1 Boss Mothership
+                const boss = new Enemy(0, 0, 4);
+                enemies.push(boss);
+
+                // 6 Guard Escorts orbiting boss
+                for (let i = 0; i < 6; i++) {
+                    enemies.push(new Enemy(i, 0, 5));
+                }
+
+                updateBossHealthUI(boss);
+            } else {
+                bossHealthContainer.classList.add('hidden');
+                
+                // Color Squad Formations:
+                // Back Row Squad (3-Tap Purple): Square / Bar (8 units)
+                for (let c = 0; c < 8; c++) enemies.push(new Enemy(c, 0, 3));
+
+                // Middle Row Squad (2-Tap Gold): Rectangle Grid (16 units: 2 rows of 8)
+                for (let c = 0; c < 16; c++) enemies.push(new Enemy(c, 1, 2));
+
+                // Front Row Squad (1-Tap Red): V-Shape / Triangle Formation (7 units)
+                for (let c = 0; c < 7; c++) enemies.push(new Enemy(c, 2, 1));
+            }
+
+            // Spawn 1 Large Heart (2 Lives) close to the player's current position
+            const spawnX = Math.max(20, Math.min(GAME_WIDTH - 20, player.x + player.width / 2));
+            const spawnY = Math.max(60, player.y - 40);
+            spawnHeartPickup(spawnX, spawnY, 2);
+        }
+
+        function updateBossHealthUI(boss) {
+            if (!boss || boss.type !== 4) return;
+            const pct = Math.max(0, Math.floor((boss.hp / boss.maxHp) * 100));
+            bossHealthBar.style.width = `${pct}%`;
+            bossHealthPercent.textContent = `${pct}%`;
+            if (!boss.shielded) {
+                bossNameText.textContent = `BOSS MOTHERSHIP`;
+                bossNameText.className = 'text-red-400 font-bold';
+            }
+        }
+
+        function updateEnemies() {
+            formationOffset += 0.8 * formationDirection;
+            if (Math.abs(formationOffset) > 35) {
+                formationDirection *= -1;
+            }
+
+            // Check if all guards are defeated on boss wave to drop shield
+            if (isBossWave) {
+                const guardsRemaining = enemies.some(e => e.type === 5);
+                const boss = enemies.find(e => e.type === 4);
+                if (boss && boss.shielded && !guardsRemaining) {
+                    boss.shielded = false;
+                    bossNameText.textContent = `BOSS MOTHERSHIP (VULNERABLE!)`;
+                    createExplosion(boss.x + boss.width / 2, boss.y + boss.height / 2, '#00ffff', 25);
+                    sfx.playPowerup();
+                }
+            }
+
+            enemies.forEach(enemy => enemy.update(formationOffset, gameState === 'PLAYING'));
+
+            // Wave Completion check
+            if (enemies.length === 0 && gameState === 'PLAYING') {
+                if (isBossWave) {
+                    bossHealthContainer.classList.add('hidden');
+                    sfx.playWaveComplete();
+                    triggerUpgradeSelection(); // Open 3-Card Upgrade Modal after Boss
+                } else {
+                    gameState = 'WAVECLEAR';
+                    sfx.playWaveComplete();
+                    setTimeout(() => {
+                        advanceNextWave();
+                    }, 2000);
+                }
+            }
+        }
+
+        // Collision Logic
+        function checkCollisions() {
+            // Player Bullets vs Enemies
+            for (let bIndex = playerBullets.length - 1; bIndex >= 0; bIndex--) {
+                const bullet = playerBullets[bIndex];
+
+                for (let eIndex = enemies.length - 1; eIndex >= 0; eIndex--) {
+                    const enemy = enemies[eIndex];
+
+                    if (bullet.x < enemy.x + enemy.width &&
+                        bullet.x + bullet.width > enemy.x &&
+                        bullet.y < enemy.y + enemy.height &&
+                        bullet.y + bullet.height > enemy.y) {
+                        
+                        // Shield Block check for Boss Mothership
+                        if (enemy.type === 4 && enemy.shielded) {
+                            createExplosion(bullet.x, bullet.y, '#00ffff', 5);
+                            sfx.playShieldHit();
+                            if (!bullet.piercing) playerBullets.splice(bIndex, 1);
+                            break;
+                        }
+
+                        enemy.hp -= bullet.damage;
+                        createExplosion(bullet.x, bullet.y, enemy.color, 4);
+
+                        if (enemy.type === 4) {
+                            updateBossHealthUI(enemy);
+                        }
+
+                        if (!bullet.piercing) {
+                            playerBullets.splice(bIndex, 1);
+                        }
+
+                        // Destroyed Enemy
+                        if (enemy.hp <= 0) {
+                            createExplosion(enemy.x + enemy.width / 2, enemy.y + enemy.height / 2, enemy.color, enemy.type === 4 ? 60 : 18);
+                            sfx.playExplosion(enemy.type === 4);
+
+                            score += enemy.points;
+                            scoreText.textContent = String(score).padStart(6, '0');
+
+                            if (score > highScore) {
+                                highScore = score;
+                                highScoreText.textContent = String(highScore).padStart(6, '0');
+                                localStorage.setItem('galaga_highscore', highScore);
+                            }
+
+                            // Spawn Mega Heart (3 Lives) upon killing the Boss Mothership
+                            if (enemy.type === 4) {
+                                spawnHeartPickup(enemy.x + enemy.width / 2, enemy.y + enemy.height / 2, 3);
+                            }
+
+                            enemies.splice(eIndex, 1);
+                        }
+                        break;
+                    }
+                }
+            }
+
+            // Enemy bullets vs Player
+            if (!player.isInvulnerable && gameState === 'PLAYING') {
+                for (let bIndex = enemyBullets.length - 1; bIndex >= 0; bIndex--) {
+                    const bullet = enemyBullets[bIndex];
+
+                    if (bullet.x < player.x + player.width &&
+                        bullet.x + (bullet.width || 4) > player.x &&
+                        bullet.y < player.y + player.height &&
+                        bullet.y + (bullet.height || 10) > player.y) {
+                        
+                        enemyBullets.splice(bIndex, 1);
+                        handlePlayerHit();
+                        break;
+                    }
+                }
+
+                // Enemy body collision
+                for (let eIndex = enemies.length - 1; eIndex >= 0; eIndex--) {
+                    const enemy = enemies[eIndex];
+
+                    if (enemy.x < player.x + player.width &&
+                        enemy.x + enemy.width > player.x &&
+                        enemy.y < player.y + player.height &&
+                        enemy.y + enemy.height > player.y) {
+                        
+                        createExplosion(enemy.x + enemy.width / 2, enemy.y + enemy.height / 2, enemy.color);
+                        if (enemy.type !== 4) enemies.splice(eIndex, 1);
+                        handlePlayerHit();
+                        break;
+                    }
+                }
+            }
+        }
+
+        function handlePlayerHit() {
+            createExplosion(player.x + player.width / 2, player.y + player.height / 2, '#00ffff', 30);
+            sfx.playExplosion(true);
+            lives--;
+            updateLivesHUD();
+
+            if (lives <= 0) {
+                triggerGameOver();
+            } else {
+                player.reset();
+                player.isInvulnerable = true;
+                player.invulnerableTimer = Date.now() + 2500;
+            }
+        }
+
+        function updateLivesHUD() {
+            livesContainer.innerHTML = '';
+            for (let i = 0; i < lives; i++) {
+                const icon = document.createElement('div');
+                icon.className = 'w-3 h-3 bg-cyan-400 rounded-sm shadow-sm shadow-cyan-300';
+                livesContainer.appendChild(icon);
+            }
+        }
+
+        function triggerGameOver() {
+            gameState = 'GAMEOVER';
+            overlayTitle.textContent = 'GAME OVER';
+            overlayTitle.className = 'text-3xl sm:text-5xl text-red-500 mb-4 tracking-wider animate-bounce';
+            overlaySub.textContent = `FINAL SCORE: ${score}`;
+            startBtn.textContent = 'TRY AGAIN';
+            uiOverlay.classList.remove('hidden');
+        }
+
+        function startNewGame() {
+            sfx.init();
+            score = 0;
+            lives = 3;
+            wave = 1;
+            scoreText.textContent = '000000';
+            highScoreText.textContent = String(highScore).padStart(6, '0');
+            waveText.textContent = '1';
+            bossHealthContainer.classList.add('hidden');
+            upgradeModal.classList.add('hidden');
+            updateLivesHUD();
+
+            playerBullets = [];
+            enemyBullets = [];
+            particles = [];
+            pickups = [];
+
+            player.resetUpgrades();
+            player.reset();
+            spawnWave(wave);
+
+            gameState = 'PLAYING';
+            uiOverlay.classList.add('hidden');
+        }
+
+        function drawWaveClearMessage() {
+            if (gameState === 'WAVECLEAR') {
+                ctx.save();
+                ctx.font = '20px "Press Start 2P"';
+                ctx.fillStyle = '#00ffcc';
+                ctx.textAlign = 'center';
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = '#00ffcc';
+                ctx.fillText(`WAVE ${wave} CLEARED!`, GAME_WIDTH / 2, GAME_HEIGHT / 2);
+                ctx.restore();
+            }
+        }
+
+        // Main Loop
+        function gameLoop() {
+            ctx.fillStyle = '#05050d';
+            ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+
+            updateStars();
+            drawStars();
+
+            if (gameState === 'PLAYING' || gameState === 'WAVECLEAR') {
+                player.update();
+                updateBullets();
+                updateEnemies();
+                updatePickups();
+                updateParticles();
+                checkCollisions();
+            } else if (gameState === 'START' || gameState === 'GAMEOVER' || gameState === 'UPGRADE_SELECT') {
+                updateParticles();
+            }
+
+            enemies.forEach(e => e.draw());
+            drawBullets();
+            drawPickups();
+            drawParticles();
+            if (gameState !== 'GAMEOVER') {
+                player.draw();
+            }
+            drawWaveClearMessage();
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Controls Binds
+        window.addEventListener('keydown', e => {
+            sfx.init();
+            if (e.code === 'ArrowLeft' || e.code === 'KeyA') keys.left = true;
+            if (e.code === 'ArrowRight' || e.code === 'KeyD') keys.right = true;
+            if (e.code === 'ArrowUp' || e.code === 'KeyW') keys.up = true;
+            if (e.code === 'ArrowDown' || e.code === 'KeyS') keys.down = true;
+            if (e.code === 'Space') {
+                keys.fire = true;
+                if (gameState === 'START' || gameState === 'GAMEOVER') {
+                    startNewGame();
+                }
+            }
+        });
+
+        window.addEventListener('keyup', e => {
+            if (e.code === 'ArrowLeft' || e.code === 'KeyA') keys.left = false;
+            if (e.code === 'ArrowRight' || e.code === 'KeyD') keys.right = false;
+            if (e.code === 'ArrowUp' || e.code === 'KeyW') keys.up = false;
+            if (e.code === 'ArrowDown' || e.code === 'KeyS') keys.down = false;
+            if (e.code === 'Space') keys.fire = false;
+        });
+
+        const bindTouch = (elem, keyName) => {
+            if (!elem) return;
+            elem.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                keys[keyName] = true;
+                sfx.init();
+            });
+            elem.addEventListener('touchend', (e) => {
+                e.preventDefault();
+                keys[keyName] = false;
+            });
+        };
+
+        bindTouch(document.getElementById('btnUp'), 'up');
+        bindTouch(document.getElementById('btnDown'), 'down');
+        bindTouch(btnLeft, 'left');
+        bindTouch(btnRight, 'right');
+        bindTouch(btnFire, 'fire');
+
+        startBtn.addEventListener('click', startNewGame);
+
+        highScoreText.textContent = String(highScore).padStart(6, '0');
+        updateLivesHUD();
+        gameLoop();
+    </script>
+</body>
+</html>
